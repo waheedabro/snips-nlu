@@ -5,7 +5,9 @@ from copy import deepcopy
 
 from mock import MagicMock, patch
 
-from snips_nlu.constants import LANGUAGE_EN, SNIPS_DATETIME, SNIPS_NUMBER
+from snips_nlu.builtin_entities import BuiltinEntityParser
+from snips_nlu.constants import LANGUAGE, LANGUAGE_EN, SNIPS_DATETIME, \
+    SNIPS_NUMBER
 from snips_nlu.dataset import validate_and_format_dataset
 from snips_nlu.preprocessing import tokenize
 from snips_nlu.slot_filler.crf_utils import (
@@ -416,15 +418,15 @@ class TestCRFFeatures(SnipsTest):
         self.assertEqual(res8, None)
         self.assertEqual(res9, UNIT_PREFIX)
 
-    @patch("snips_nlu.slot_filler.feature_factory.get_supported_entities")
-    def test_builtin_entity_match_factory(self, mock_supported_entities):
+    @patch("snips_nlu.slot_filler.feature_factory.get_builtin_entity_scope")
+    def test_builtin_entity_match_factory(self, mocked_builtin_entity_scope):
         # Given
-        def mocked_supported_entities(language):
-            if language == LANGUAGE_EN:
+        def mock_builtin_entity_scope(dataset, intent):
+            if dataset[LANGUAGE] == LANGUAGE_EN:
                 return {SNIPS_NUMBER, SNIPS_DATETIME}
-            return set()
+            return []
 
-        mock_supported_entities.side_effect = mocked_supported_entities
+        mocked_builtin_entity_scope.side_effect = mock_builtin_entity_scope
 
         config = {
             "factory_name": "builtin_entity_match",
@@ -441,7 +443,7 @@ class TestCRFFeatures(SnipsTest):
         factory.fit(mocked_dataset, None)
 
         # When
-        features = factory.build_features()
+        features = factory.build_features(BuiltinEntityParser("en", None))
         features = sorted(features, key=lambda f: f.base_name)
         res0 = features[0].compute(0, cache)
         res1 = features[0].compute(1, cache)

@@ -20,13 +20,14 @@ class ProcessingUnit(with_metaclass(ABCMeta, object)):
     represents the :class:`.ProcessingUnitConfig` used to initialize it.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, builtin_entity_parser):
         if config is None or isinstance(config, ProcessingUnitConfig):
             self.config = config
         elif isinstance(config, dict):
             self.config = self.config_type.from_dict(config)
         else:
             raise ValueError("Unexpected config type: %s" % type(config))
+        self.builtin_entity_parser = builtin_entity_parser
 
     def persist_metadata(self, path, **kwargs):
         metadata = {"unit_name": self.unit_name}
@@ -48,7 +49,7 @@ class ProcessingUnit(with_metaclass(ABCMeta, object)):
         pass
 
     @classmethod
-    def from_path(cls, path):
+    def from_path(cls, path, **shared):
         raise NotImplementedError
 
     def to_byte_array(self):
@@ -75,7 +76,7 @@ class ProcessingUnit(with_metaclass(ABCMeta, object)):
         return processing_unit_bytes
 
     @classmethod
-    def from_byte_array(cls, unit_bytes):
+    def from_byte_array(cls, unit_bytes, **shared):
         """Load a :class:`ProcessingUnit` instance from a bytearray
 
         Args:
@@ -88,16 +89,17 @@ class ProcessingUnit(with_metaclass(ABCMeta, object)):
             with archive_path.open(mode="wb") as f:
                 f.write(unit_bytes)
             unzip_archive(archive_path, str(tmp_dir))
-            processing_unit = cls.from_path(tmp_dir / cleaned_unit_name)
+            processing_unit = cls.from_path(tmp_dir / cleaned_unit_name,
+                                            **shared)
         return processing_unit
 
 
 def _sanitize_unit_name(unit_name):
-    return unit_name\
-        .lower()\
-        .strip()\
-        .replace(" ", "")\
-        .replace("/", "")\
+    return unit_name \
+        .lower() \
+        .strip() \
+        .replace(" ", "") \
+        .replace("/", "") \
         .replace("\\", "")
 
 
@@ -125,22 +127,24 @@ def get_processing_unit_config(unit_config):
                          % type(unit_config))
 
 
-def build_processing_unit(unit_config):
+def build_processing_unit(unit_config, builtin_entity_parser=None):
     """Creates a new :class:`ProcessingUnit` from the provided *unit_config*
 
     Args:
         unit_config (:class:`.ProcessingUnitConfig`): The processing unit
             config
+        builtin_entity_parser (:class:`.BuiltinEntityParser`): The builtin
+            entity parser used in the processing pipeline
     """
     unit = _get_unit_type(unit_config.unit_name)
-    return unit(unit_config)
+    return unit(unit_config, builtin_entity_parser)
 
 
-def load_processing_unit(unit_path):
+def load_processing_unit(unit_path, **shared):
     """Load a :class:`ProcessingUnit` from a persisted processing unit
     directory"""
     unit_path = Path(unit_path)
     with (unit_path / "metadata.json").open(encoding="utf8") as f:
         metadata = json.load(f)
     unit = _get_unit_type(metadata["unit_name"])
-    return unit.from_path(unit_path)
+    return unit.from_path(unit_path, **shared)
